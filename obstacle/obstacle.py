@@ -34,16 +34,23 @@ class ObstacleEnv(Env):
         'video.frames_per_second' : 50
     }
     def __init__(self):
-        self.state = None
+        self.state = np.zeros(2, dtype=np.float32)
         self.viewer = None
+        self.robot = GeomContainer(rendering.make_circle(10))
+        self.robot.set_color(.5, .5, .5)
     def _step(self, action):
-        self.state[1] += 1
+        self.robot.move(1, 2)
+        self.update_state()
+        #
         reward = 1
-        done = (self.state[1] >= 100)
+        done = (self.robot.pos[0] > 200 and self.robot.pos[1] > 200)
         return self.state, reward, done, {}
     def _reset(self):
-        self.state = np.array([0., 0.])
+        self.robot.set_pos(100, 100)
+        self.update_state()
         return self.state
+    def update_state(self):
+        self.state[0:2] = self.robot.pos
     def _render(self, mode='human', close=False):
         if close:
             if self.viewer is not None:
@@ -55,13 +62,7 @@ class ObstacleEnv(Env):
             screen_height = 400
             self.viewer = rendering.Viewer(screen_width, screen_height)
             #
-            robot_size = 10
-            robot_fig = rendering.FilledPolygon([(-robot_size,-robot_size),(-robot_size,robot_size),(robot_size,robot_size),(robot_size,-robot_size)])
-            robot_fig.set_color(.5, .5, .5)
-            self.robot_trans = rendering.Transform()
-            robot_fig.add_attr(self.robot_trans)
-            self.viewer.add_geom(robot_fig)
-        self.robot_trans.set_translation(*self.state)
+            self.viewer.add_geom(self.robot)
         return self.viewer.render(return_rgb_array=(mode=='rgb_array'))
 
 
@@ -75,13 +76,13 @@ def main():
         )
     import gym
     env = gym.make('Obstacle-v0')
-    for episode in range(10):
+    for episode in range(5):
         env.reset()
         while True:
             env.render()
             observation, reward, done, info = env.step(None)
             if done:
-                print('finished episode ' + str(episode))
+                print('finished episode {}, reward={}'.format(episode, reward))
                 break
 
 if __name__ == '__main__':
