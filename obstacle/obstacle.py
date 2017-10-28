@@ -2,7 +2,7 @@ import numpy as np
 from gym import Env
 from gym.envs.classic_control import rendering
 
-class Obstacle(Env):
+class ObstacleEnv(Env):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second' : 50
@@ -43,7 +43,7 @@ def main():
     from gym.envs.registration import register
     register(
         id='Obstacle-v0',
-        entry_point=Obstacle,
+        entry_point=ObstacleEnv,
         max_episode_steps=200,
         reward_threshold=100.0,
         )
