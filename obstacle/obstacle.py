@@ -2,6 +2,32 @@ import numpy as np
 from gym import Env
 from gym.envs.classic_control import rendering
 
+class GeomContainer(rendering.Geom):
+    def __init__(self, geom, pos_x=0, pos_y=0, angle=0):
+        rendering.Geom.__init__(self)
+        self.geom = geom
+        self.pos = np.asarray([pos_x, pos_y])
+        assert self.pos.shape == (2,), 'Invalid pos-array shape'
+        self.angle = angle
+        self.trans = rendering.Transform()
+        self.add_attr(self.trans)
+    def render1(self):
+        self.geom._color = self._color
+        self.geom.attrs = self.attrs
+        self.trans.set_translation(*self.pos)
+        self.trans.set_rotation(self.angle)
+        self.geom.render1()
+    def set_color(self, r, g, b):
+        self.geom.set_color(r, g, b)
+    def set_pos(self, pos_x, pos_y):
+        self.pos[:] = pos_x, pos_y
+    def move(self, diff_x, diff_y):
+        self.pos[:] += diff_x, diff_y
+    def set_angle(self, angle):
+        self.angle = angle
+    def rotate(self, diff_angle):
+        self.angle += diff_angle
+
 class ObstacleEnv(Env):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
