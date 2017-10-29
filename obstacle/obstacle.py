@@ -17,8 +17,6 @@ class GeomContainer(rendering.Geom):
         self.trans.set_translation(*self.pos)
         self.trans.set_rotation(self.angle)
         self.geom.render1()
-    def set_color(self, r, g, b):
-        self.geom.set_color(r, g, b)
     def set_pos(self, pos_x, pos_y):
         self.pos[:] = pos_x, pos_y
     def move(self, diff_x, diff_y):
