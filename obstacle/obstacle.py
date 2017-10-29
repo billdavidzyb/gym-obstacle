@@ -7,7 +7,7 @@ class GeomContainer(rendering.Geom):
     def __init__(self, geom, pos_x=0, pos_y=0, angle=0):
         rendering.Geom.__init__(self)
         self.geom = geom
-        self.pos = np.asarray([pos_x, pos_y])
+        self.pos = np.asarray([pos_x, pos_y], dtype=np.float32)
         assert self.pos.shape == (2,), 'Invalid pos-array shape'
         self.angle = angle
         self.trans = rendering.Transform()
@@ -18,10 +18,14 @@ class GeomContainer(rendering.Geom):
         self.trans.set_translation(*self.pos)
         self.trans.set_rotation(self.angle)
         self.geom.render1()
+    #
     def set_pos(self, pos_x, pos_y):
         self.pos[:] = pos_x, pos_y
-    def move(self, diff_x, diff_y):
+    def _move_by_xy(self, diff_x, diff_y):
         self.pos[:] += diff_x, diff_y
+    def move(self, v):
+        self._move_by_xy(v * np.cos(self.angle), v * np.sin(self.angle))
+    #
     def set_angle(self, angle):
         self.angle = angle
     def rotate(self, diff_angle):
@@ -35,7 +39,7 @@ class ObstacleEnv(Env):
     def __init__(self):
         self.screen_width = 600
         self.screen_height = 400
-        self.state = np.zeros(2, dtype=np.float32)
+        self.state = np.zeros(8, dtype=np.float32)
         self.viewer = None
         self.robot = GeomContainer(rendering.make_circle(30))
         self.robot.set_color(0, 0, 1)
@@ -45,7 +49,12 @@ class ObstacleEnv(Env):
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
     def _step(self, action):
-        self.robot.move(1, 2)
+        if action == 0:
+            self.robot.move(3)
+        elif action == 1:
+            self.robot.rotate(1)
+        else:
+            self.robot.rotate(-1)
         self.update_state()
         #
         reward = 1
@@ -61,6 +70,9 @@ class ObstacleEnv(Env):
         return self.state
     def update_state(self):
         self.state[0:2] = self.robot.pos
+        self.state[2:4] = self.obstacles[0].pos
+        self.state[4:6] = self.obstacles[1].pos
+        self.state[6:8] = self.obstacles[2].pos
     def _render(self, mode='human', close=False):
         if close:
             if self.viewer is not None:
@@ -87,10 +99,16 @@ def main():
     import gym
     env = gym.make('Obstacle-v0')
     for episode in range(5):
-        env.reset()
+        step_count = 0
+        state = env.reset()
         while True:
             env.render()
-            observation, reward, done, info = env.step(None)
+            if step_count != 30:
+                action = 0
+            else:
+                action = 1
+            state, reward, done, info = env.step(action)
+            step_count += 1
             if done:
                 print('finished episode {}, reward={}'.format(episode, reward))
                 break
