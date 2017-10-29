@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.random import randint
 from gym import Env
 from gym.envs.classic_control import rendering
 
@@ -32,10 +33,17 @@ class ObstacleEnv(Env):
         'video.frames_per_second' : 50
     }
     def __init__(self):
+        self.screen_width = 600
+        self.screen_height = 400
         self.state = np.zeros(2, dtype=np.float32)
         self.viewer = None
-        self.robot = GeomContainer(rendering.make_circle(10))
-        self.robot.set_color(.5, .5, .5)
+        self.robot = GeomContainer(rendering.make_circle(30))
+        self.robot.set_color(0, 0, 1)
+        self.obstacles = []
+        for i in range(3):
+            obs = GeomContainer(rendering.make_circle(30))
+            obs.set_color(0, 1, 0)
+            self.obstacles.append(obs)
     def _step(self, action):
         self.robot.move(1, 2)
         self.update_state()
@@ -45,6 +53,10 @@ class ObstacleEnv(Env):
         return self.state, reward, done, {}
     def _reset(self):
         self.robot.set_pos(100, 100)
+        self.robot.set_angle(0)
+        for obs in self.obstacles:
+            obs.set_pos(randint(0, self.screen_width), randint(0, self.screen_height))
+            obs.set_angle(0)
         self.update_state()
         return self.state
     def update_state(self):
@@ -56,11 +68,11 @@ class ObstacleEnv(Env):
                 self.viewer = None
             return
         if self.viewer is None:
-            screen_width = 600
-            screen_height = 400
-            self.viewer = rendering.Viewer(screen_width, screen_height)
+            self.viewer = rendering.Viewer(self.screen_width, self.screen_height)
             #
             self.viewer.add_geom(self.robot)
+            for geom in self.obstacles:
+                self.viewer.add_geom(geom)
         return self.viewer.render(return_rgb_array=(mode=='rgb_array'))
 
 
