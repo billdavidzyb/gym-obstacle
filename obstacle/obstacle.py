@@ -26,10 +26,10 @@ class GeomContainer(rendering.Geom):
     def move(self, v):
         self._move_by_xy(v * np.cos(self.angle), v * np.sin(self.angle))
     #
-    def set_angle(self, angle):
-        self.angle = angle
-    def rotate(self, diff_angle):
-        self.angle += diff_angle
+    def set_angle(self, angle, deg=False):
+        self.angle = angle if not deg else np.deg2rad(angle)
+    def rotate(self, diff_angle, deg=False):
+        self.angle += diff_angle if not deg else np.deg2rad(diff_angle)
 
 class ObstacleEnv(Env):
     metadata = {
@@ -52,9 +52,9 @@ class ObstacleEnv(Env):
         if action == 0:
             self.robot.move(3)
         elif action == 1:
-            self.robot.rotate(1)
+            self.robot.rotate(30, deg=True)
         else:
-            self.robot.rotate(-1)
+            self.robot.rotate(-30, deg=True)
         self.update_state()
         #
         reward = 1
