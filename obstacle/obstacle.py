@@ -2,16 +2,21 @@ import numpy as np
 from numpy.random import randint
 from gym import Env
 from gym.envs.classic_control import rendering
+from sympy.geometry import Point, Line, Circle, Polygon, intersection
 
 class GeomContainer(rendering.Geom):
-    def __init__(self, geom, pos_x=0, pos_y=0, angle=0):
+    def __init__(self, geom, collider_func=None, pos_x=0, pos_y=0, angle=0):
         rendering.Geom.__init__(self)
         self.geom = geom
+        self.collider_func = collider_func
+        self.collider = None
         self.pos = np.asarray([pos_x, pos_y], dtype=np.float32)
         assert self.pos.shape == (2,), 'Invalid pos-array shape'
         self.angle = angle
         self.trans = rendering.Transform()
+        #
         self.add_attr(self.trans)
+        self.update_collider()
     def render1(self):
         self.geom._color = self._color
         self.geom.attrs = self.attrs
@@ -21,15 +26,40 @@ class GeomContainer(rendering.Geom):
     #
     def set_pos(self, pos_x, pos_y):
         self.pos[:] = pos_x, pos_y
+        self.update_collider()
     def _move_by_xy(self, diff_x, diff_y):
-        self.pos[:] += diff_x, diff_y
+        self.set_pos(self.pos[0] + diff_x, self.pos[1] + diff_y)
     def move(self, v):
         self._move_by_xy(v * np.cos(self.angle), v * np.sin(self.angle))
     #
     def set_angle(self, angle, deg=False):
         self.angle = angle if not deg else np.deg2rad(angle)
+        self.update_collider()
     def rotate(self, diff_angle, deg=False):
-        self.angle += diff_angle if not deg else np.deg2rad(diff_angle)
+        self.set_angle(self.angle + diff_angle if not deg else np.deg2rad(diff_angle))
+    #
+    def update_collider(self):
+        if self.collider_func is not None:
+            self.collider = self.collider_func(self.pos, self.angle)
+    def get_intersections(self, collider):
+        if self.collider_func is not None:
+            return intersection(self.collider_func(), collider)
+        else:
+            return []
+    def get_nearest_intersection(self, collider, reference_point):
+        intersecions = self.get_intersections(collider)
+        intersecions = sorted(intersecions, key=lambda point: point.distance(reference_point))
+        if len(intersecions) == 0:
+            return None
+        else:
+            return intersecions[0]
+
+UNIT_SQUARE = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
+
+def rotate(pos_array, angle):
+    c, s = np.cos(angle), np.sin(angle)
+    rotation_matrix = np.array([[c, -s], [s, c]])
+    return np.dot(rotation_matrix, pos_array.T).T
 
 class ObstacleEnv(Env):
     metadata = {
@@ -41,11 +71,11 @@ class ObstacleEnv(Env):
         self.screen_height = 400
         self.state = np.zeros(8, dtype=np.float32)
         self.viewer = None
-        self.robot = GeomContainer(rendering.make_circle(30))
+        self.robot = GeomContainer(rendering.make_circle(30), lambda pos, angle: Circle(Point(*pos), 30))
         self.robot.set_color(0, 0, 1)
         self.obstacles = []
         for i in range(3):
-            obs = GeomContainer(rendering.make_circle(30))
+            obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: Polygon(*rotate(UNIT_SQUARE * 50 + pos, angle)))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
     def _step(self, action):
