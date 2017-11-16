@@ -74,10 +74,14 @@ class ObstacleEnv(Env):
         self.robot = GeomContainer(rendering.make_circle(30), lambda pos, angle: Circle(Point(*pos), 30))
         self.robot.set_color(0, 0, 1)
         self.obstacles = []
+        self.visible_object = []
         for i in range(3):
             obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: Polygon(*rotate(UNIT_SQUARE * 50 + pos, angle)))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
+        #
+        self.register_visible_object(self.robot)
+        self.register_visible_object(*self.obstacles)
     def _step(self, action):
         if action == 0:
             self.robot.move(3)
@@ -103,6 +107,8 @@ class ObstacleEnv(Env):
         self.state[2:4] = self.obstacles[0].pos
         self.state[4:6] = self.obstacles[1].pos
         self.state[6:8] = self.obstacles[2].pos
+    def register_visible_object(self, *obj):
+        self.visible_object.extend(obj)
     def _render(self, mode='human', close=False):
         if close:
             if self.viewer is not None:
@@ -112,8 +118,7 @@ class ObstacleEnv(Env):
         if self.viewer is None:
             self.viewer = rendering.Viewer(self.screen_width, self.screen_height)
             #
-            self.viewer.add_geom(self.robot)
-            for geom in self.obstacles:
+            for geom in self.visible_object:
                 self.viewer.add_geom(geom)
         return self.viewer.render(return_rgb_array=(mode=='rgb_array'))
 
