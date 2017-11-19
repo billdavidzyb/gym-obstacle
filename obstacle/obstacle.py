@@ -2,7 +2,7 @@ import numpy as np
 from numpy.random import randint
 from gym import Env
 from gym.envs.classic_control import rendering
-from sympy.geometry import Point, Line, Circle, Polygon, intersection
+from sympy.geometry import Point, Line, Ray, Circle, Polygon, intersection
 
 class GeomContainer(rendering.Geom):
     def __init__(self, geom, collider_func=None, pos_x=0, pos_y=0, angle=0):
@@ -46,13 +46,44 @@ class GeomContainer(rendering.Geom):
             return intersection(self.collider_func(), collider)
         else:
             return []
-    def get_nearest_intersection(self, collider, reference_point):
-        intersecions = self.get_intersections(collider)
-        intersecions = sorted(intersecions, key=lambda point: point.distance(reference_point))
-        if len(intersecions) == 0:
-            return None
+
+def choose_nearest_point(points, reference_point):
+    if len(points) == 0:
+        raise RuntimeError()
+    points = sorted(points, key=lambda point: point.distance(reference_point))
+    return point[0]
+
+class Sensor(GeomContainer):
+    def __init__(self, geom, **kwargs):
+        GeomContainer.__init__(self, geom, **kwargs)
+    def detect(self, objects):
+        raise NotImplementedError()
+
+class DistanceSensor(Sensor):
+    def __init__(self, geom, **kwargs):
+        Sensor.__init__(self, geom, **kwargs)
+        self.ray_geom = rendering.Line()
+        self.intersection_pos = self.pos
+        self.distance = 0
+        self.max_distance = 1000
+    def render1(self):
+        self.ray_geom.start = self.pos
+        self.ray_geom.end = self.intersection_pos
+        self.ray_geom.render1()
+        Sensor.render1(self)
+    def detect(self, visible_objects):
+        ray = Ray(self.pos, angle=self.angle)
+        candidates = []
+        for obj in visible_objects:
+            candidates.extend(obj.get_intersections(ray))
+        if len(candidates) > 0:
+            point = choose_nearest_point(candidates, ray.source)
+            self.intersection_pos = [point.x.evalf(), point.y.evalf()]
+            self.distance = np.linalg.norm(self.pos - self.intersection_pos)
         else:
-            return intersecions[0]
+            self.intersection_pos = self.pos
+            self.distance = self.max_distance
+        return self.distance
 
 UNIT_SQUARE = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
 
