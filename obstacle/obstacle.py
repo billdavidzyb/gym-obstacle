@@ -16,17 +16,15 @@ class GeomContainer(rendering.Geom):
         self.trans = rendering.Transform()
         #
         self.add_attr(self.trans)
-        self.update_collider()
+        self.update()
     def render1(self):
         self.geom._color = self._color
         self.geom.attrs = self.attrs
-        self.trans.set_translation(*self.pos)
-        self.trans.set_rotation(self.angle)
         self.geom.render1()
     #
     def set_pos(self, pos_x, pos_y):
         self.pos[:] = pos_x, pos_y
-        self.update_collider()
+        self.update()
     def _move_by_xy(self, diff_x, diff_y):
         self.set_pos(self.pos[0] + diff_x, self.pos[1] + diff_y)
     def move(self, v):
@@ -34,13 +32,23 @@ class GeomContainer(rendering.Geom):
     #
     def set_angle(self, angle, deg=False):
         self.angle = angle if not deg else np.deg2rad(angle)
-        self.update_collider()
+        self.update()
     def rotate(self, diff_angle, deg=False):
         self.set_angle(self.angle + diff_angle if not deg else np.deg2rad(diff_angle))
     #
-    def update_collider(self):
+    def get_absolute_pos_angle(self):
+        abs_pos = np.zeros(2, dtype=np.float32)
+        abs_angle = 0
+        for attr in self.attrs:
+            if isinstance(attr, rendering.Transform):
+                abs_pos += attr.translation
+                abs_angle += attr.rotation
+        return abs_pos, abs_angle
+    def update(self):
+        self.trans.set_translation(*self.pos)
+        self.trans.set_rotation(self.angle)
         if self.collider_func is not None:
-            self.collider = self.collider_func(self.pos, self.angle)
+            self.collider = self.collider_func(*self.get_absolute_pos_angle())
     def get_intersections(self, collider):
         if self.collider_func is not None:
             return intersection(self.collider_func(), collider)
@@ -65,14 +73,14 @@ class DistanceSensor(Sensor):
     def __init__(self, geom, **kwargs):
         Sensor.__init__(self, geom, **kwargs)
         self.ray_geom = rendering.Line()
-        self.intersection_pos = self.pos
+        self.intersection_pos = [0, 0]
         self.distance = 0
         self.max_distance = 1000
     def render1(self):
+        Sensor.render1(self)
         self.ray_geom.start = self.pos
         self.ray_geom.end = self.intersection_pos
         self.ray_geom.render1()
-        Sensor.render1(self)
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
     def detect(self, visible_objects):
