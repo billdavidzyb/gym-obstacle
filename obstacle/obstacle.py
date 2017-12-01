@@ -46,6 +46,8 @@ class GeomContainer(rendering.Geom):
             return intersection(self.collider_func(), collider)
         else:
             return []
+    def get_geom_list(self):
+        return [self]
 
 def choose_nearest_point(points, reference_point):
     if len(points) == 0:
@@ -71,6 +73,8 @@ class DistanceSensor(Sensor):
         self.ray_geom.end = self.intersection_pos
         self.ray_geom.render1()
         Sensor.render1(self)
+    def get_geom_list(self):
+        return Sensor.get_geom_list(self) + [self.ray_geom]
     def detect(self, visible_objects):
         ray = Ray(self.pos, angle=self.angle)
         candidates = []
@@ -104,6 +108,8 @@ class Robot(GeomContainer):
         GeomContainer.render1(self)
         for sensor in self.sensors:
             sensor.render1()
+    def get_geom_list(self):
+        return GeomContainer.get_geom_list(self) + self.sensors
 
 UNIT_SQUARE = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
 
@@ -127,14 +133,15 @@ class ObstacleEnv(Env):
         self.viewer = None
         self.robot = Robot()
         self.obstacles = []
-        self.visible_object = []
         for i in range(3):
             obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: Polygon(*rotate(UNIT_SQUARE * 50 + pos, angle)))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
         #
-        self.register_visible_object(self.robot, *self.robot.sensors)
-        self.register_visible_object(*self.obstacles)
+        self.visible_object = []
+        self.register_visible_object(self.robot)
+        for obs in self.obstacles:
+            self.register_visible_object(obs)
     def _step(self, action):
         if action == 0:
             self.robot.move(3)
@@ -160,8 +167,8 @@ class ObstacleEnv(Env):
         self.state[2:4] = self.obstacles[0].pos
         self.state[4:6] = self.obstacles[1].pos
         self.state[6:8] = self.obstacles[2].pos
-    def register_visible_object(self, *obj):
-        self.visible_object.extend(obj)
+    def register_visible_object(self, geom_container):
+        self.visible_object.extend(geom_container.get_geom_list())
     def _render(self, mode='human', close=False):
         if close:
             if self.viewer is not None:
