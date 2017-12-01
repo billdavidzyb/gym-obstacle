@@ -85,9 +85,32 @@ class DistanceSensor(Sensor):
             self.distance = self.max_distance
         return self.distance
 
+class Robot(GeomContainer):
+    def __init__(self, **kwargs):
+        geom = rendering.make_circle(30)
+        collider_func = lambda pos, angle: Circle(Point(*pos), 30)
+        GeomContainer.__init__(self, geom, collider_func=collider_func)
+        #
+        self.set_color(0, 0, 1)
+        #
+        self.sensors = []
+        for i in range(3):
+            dist_sensor = DistanceSensor(rendering.make_circle(5))
+            dist_sensor.set_color(1, 0, 0)
+            dist_sensor.set_pos(*(rotate([0, 30], 120 * i, deg=True)))
+            dist_sensor.add_attr(self.trans)
+            self.sensors.append(dist_sensor)
+    def render1(self):
+        GeomContainer.render1(self)
+        for sensor in self.sensors:
+            sensor.render1()
+
 UNIT_SQUARE = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
 
-def rotate(pos_array, angle):
+def rotate(pos_array, angle, deg=False):
+    pos_array = np.array(pos_array)
+    if deg:
+        angle = np.deg2rad(angle)
     c, s = np.cos(angle), np.sin(angle)
     rotation_matrix = np.array([[c, -s], [s, c]])
     return np.dot(rotation_matrix, pos_array.T).T
@@ -102,8 +125,7 @@ class ObstacleEnv(Env):
         self.screen_height = 400
         self.state = np.zeros(8, dtype=np.float32)
         self.viewer = None
-        self.robot = GeomContainer(rendering.make_circle(30), lambda pos, angle: Circle(Point(*pos), 30))
-        self.robot.set_color(0, 0, 1)
+        self.robot = Robot()
         self.obstacles = []
         self.visible_object = []
         for i in range(3):
@@ -111,7 +133,7 @@ class ObstacleEnv(Env):
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
         #
-        self.register_visible_object(self.robot)
+        self.register_visible_object(self.robot, *self.robot.sensors)
         self.register_visible_object(*self.obstacles)
     def _step(self, action):
         if action == 0:
