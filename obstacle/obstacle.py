@@ -13,14 +13,15 @@ class GeomContainer(rendering.Geom):
         self.pos = np.asarray([pos_x, pos_y], dtype=np.float32)
         assert self.pos.shape == (2,), 'Invalid pos-array shape'
         self.angle = angle
+        self.abs_pos = np.copy(self.pos)
+        self.abs_angle = self.angle
         self.trans = rendering.Transform()
         #
         self.add_attr(self.trans)
-        self.update()
-    def render1(self):
+    def render(self):
         self.geom._color = self._color
         self.geom.attrs = self.attrs
-        self.geom.render1()
+        self.geom.render()
     #
     def set_pos(self, pos_x, pos_y):
         self.pos[:] = pos_x, pos_y
@@ -36,22 +37,24 @@ class GeomContainer(rendering.Geom):
     def rotate(self, diff_angle, deg=False):
         self.set_angle(self.angle + diff_angle if not deg else np.deg2rad(diff_angle))
     #
-    def get_absolute_pos_angle(self):
-        abs_pos = np.zeros(2, dtype=np.float32)
-        abs_angle = 0
-        for attr in self.attrs:
-            if isinstance(attr, rendering.Transform):
-                abs_pos += attr.translation
-                abs_angle += attr.rotation
-        return abs_pos, abs_angle
     def update(self):
         self.trans.set_translation(*self.pos)
         self.trans.set_rotation(self.angle)
+        #
+        self.abs_pos[:] = 0
+        self.abs_angle = 0
+        prev_angle = 0
+        for attr in reversed(self.attrs):
+            if isinstance(attr, rendering.Transform):
+                self.abs_pos += rotate(attr.translation, prev_angle)
+                self.abs_angle += attr.rotation
+                prev_angle = attr.rotation
+        #
         if self.collider_func is not None:
-            self.collider = self.collider_func(*self.get_absolute_pos_angle())
+            self.collider = self.collider_func(self.abs_pos, self.abs_angle)
     def get_intersections(self, collider):
         if self.collider_func is not None:
-            return intersection(self.collider_func(), collider)
+            return intersection(self.collider_func(self.abs_pos, self.abs_angle), collider)
         else:
             return []
     def get_geom_list(self):
@@ -61,7 +64,7 @@ def choose_nearest_point(points, reference_point):
     if len(points) == 0:
         raise RuntimeError()
     points = sorted(points, key=lambda point: point.distance(reference_point))
-    return point[0]
+    return points[0]
 
 class Sensor(GeomContainer):
     def __init__(self, geom, **kwargs):
@@ -73,34 +76,41 @@ class DistanceSensor(Sensor):
     def __init__(self, geom, **kwargs):
         Sensor.__init__(self, geom, **kwargs)
         self.ray_geom = rendering.Line()
+        self.ray_geom.set_color(1, 0.5, 0.5)
         self.intersection_pos = [0, 0]
         self.distance = 0
         self.max_distance = 1000
-    def render1(self):
-        Sensor.render1(self)
-        self.ray_geom.start = self.pos
-        self.ray_geom.end = self.intersection_pos
-        self.ray_geom.render1()
+    def render(self):
+        Sensor.render(self)
+#        print(self.abs_pos)
+        self.ray_geom.start = self.abs_pos
+        self.ray_geom.end = self.abs_pos + rotate([100, 0], self.abs_angle)
+        self.ray_geom.render()
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
     def detect(self, visible_objects):
-        ray = Ray(self.pos, angle=self.angle)
+        '''
+        ray = Ray(self.abs_pos, angle=self.abs_angle)
         candidates = []
         for obj in visible_objects:
             candidates.extend(obj.get_intersections(ray))
+        print(len(candidates))
         if len(candidates) > 0:
             point = choose_nearest_point(candidates, ray.source)
-            self.intersection_pos = [point.x.evalf(), point.y.evalf()]
-            self.distance = np.linalg.norm(self.pos - self.intersection_pos)
+            self.intersection_pos = [float(point.x), float(point.y)]
+            diff_vector = self.abs_pos - self.intersection_pos
+            self.distance = np.sqrt(np.dot(diff_vector, diff_vector))
         else:
-            self.intersection_pos = self.pos
+            self.intersection_pos = self.abs_pos
             self.distance = self.max_distance
-        return self.distance
+        '''
+        self.intersection_pos = [0, 0]
 
 class Robot(GeomContainer):
     def __init__(self, **kwargs):
         geom = rendering.make_circle(30)
-        collider_func = lambda pos, angle: Circle(Point(*pos), 30)
+        collider_func = None
+#        collider_func = lambda pos, angle: Circle(Point(*pos), 30)
         GeomContainer.__init__(self, geom, collider_func=collider_func)
         #
         self.set_color(0, 0, 1)
@@ -109,15 +119,23 @@ class Robot(GeomContainer):
         for i in range(3):
             dist_sensor = DistanceSensor(rendering.make_circle(5))
             dist_sensor.set_color(1, 0, 0)
-            dist_sensor.set_pos(*(rotate([0, 30], 120 * i, deg=True)))
+            dist_sensor.set_pos(*(rotate([30, 0], 120 * i, deg=True)))
+            dist_sensor.set_angle(120 * i, True)
             dist_sensor.add_attr(self.trans)
             self.sensors.append(dist_sensor)
-    def render1(self):
-        GeomContainer.render1(self)
+    def render(self):
+        GeomContainer.render(self)
         for sensor in self.sensors:
-            sensor.render1()
+            sensor.render()
     def get_geom_list(self):
         return GeomContainer.get_geom_list(self) + self.sensors
+    def update(self):
+        GeomContainer.update(self)
+        for sensor in self.sensors:
+            sensor.update()
+    def update_sensors(self, visible_objects):
+        for sensor in self.sensors:
+            sensor.detect(visible_objects)
 
 UNIT_SQUARE = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
 
@@ -152,15 +170,16 @@ class ObstacleEnv(Env):
             self.register_visible_object(obs)
     def _step(self, action):
         if action == 0:
-            self.robot.move(3)
+            self.robot.move(2)
         elif action == 1:
-            self.robot.rotate(30, deg=True)
+            self.robot.rotate(60, deg=True)
         else:
-            self.robot.rotate(-30, deg=True)
+            self.robot.rotate(-60, deg=True)
+        self.robot.update_sensors(self.visible_object)
         self.update_state()
         #
         reward = 1
-        done = (self.robot.pos[0] > 200 and self.robot.pos[1] > 200)
+        done = (self.robot.pos[0] > 400 and self.robot.pos[1] > 400)
         return self.state, reward, done, {}
     def _reset(self):
         self.robot.set_pos(100, 100)
@@ -206,7 +225,7 @@ def main():
         state = env.reset()
         while True:
             env.render()
-            if step_count != 30:
+            if step_count != 60:
                 action = 0
             else:
                 action = 1
