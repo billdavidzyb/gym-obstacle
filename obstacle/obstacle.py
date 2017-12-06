@@ -2,14 +2,12 @@ import numpy as np
 from numpy.random import randint
 from gym import Env
 from gym.envs.classic_control import rendering
-from sympy.geometry import Point, Line, Ray, Circle, Polygon, intersection
 
 class GeomContainer(rendering.Geom):
     def __init__(self, geom, collider_func=None, pos_x=0, pos_y=0, angle=0):
         rendering.Geom.__init__(self)
         self.geom = geom
         self.collider_func = collider_func
-        self.collider = None
         self.pos = np.asarray([pos_x, pos_y], dtype=np.float32)
         assert self.pos.shape == (2,), 'Invalid pos-array shape'
         self.angle = angle
@@ -49,14 +47,16 @@ class GeomContainer(rendering.Geom):
                 self.abs_pos += rotate(attr.translation, prev_angle)
                 self.abs_angle += attr.rotation
                 prev_angle = attr.rotation
-        #
-        if self.collider_func is not None:
-            self.collider = self.collider_func(self.abs_pos, self.abs_angle)
-    def get_intersections(self, collider):
-        if self.collider_func is not None:
-            return intersection(self.collider_func(self.abs_pos, self.abs_angle), collider)
-        else:
+    def get_intersections(self, segment_list):
+        if self.collider_func is None:
             return []
+        intersections = []
+        for collider_segment in self.collider_func(self.abs_pos, self.abs_angle):
+            for segment in segment_list:
+                intersection = collider_segment.get_intersection(segment)
+                if intersection is not None:
+                    intersections.append(intersection)
+        return intersections
     def get_geom_list(self):
         return [self]
 
@@ -65,6 +65,29 @@ def choose_nearest_point(points, reference_point):
         raise RuntimeError()
     points = sorted(points, key=lambda point: point.distance(reference_point))
     return points[0]
+
+class Segment():
+    def __init__(self, start, end):
+        self.start = np.asarray(start, dtype=np.float32)
+        self.end = np.asarray(end, dtype=np.float32)
+    def diff_x(self):
+        return self.end[0] - self.start[0]
+    def diff_y(self):
+        return self.end[1] - self.start[1]
+    def get_intersecion(self, segment):
+        def check_intersection_ls(line, segment):
+            l = line.end - line.start
+            p1 = segment.start - line.start
+            p2 = segment.end - line.start
+            return np.sign(np.cross(l, p1)) == np.sign(np.cross(l, p2)) # TODO: sign==0
+        def check_intersection_ss(seg1, seg2):
+            return check_intersection_ls(line=seg1, segment=seg2) and check_intersection_ls(line=seg2, segment=seg1)
+        s1, s2 = self, segment
+        if check_intersection_ss(s1, s2):
+            r = (s2.diff_y() * (s2.start[0] - s1.start[0])) / (s2.diff_x() * (s2.start[1] - s1.start[1])) / (s1.diff_x() * s2.diff_y() - s1.diff_y() * s2.diff_x())
+            return r * s1.start + (1 - r) * s1.end
+        else:
+            return None
 
 class Sensor(GeomContainer):
     def __init__(self, geom, **kwargs):
@@ -89,28 +112,13 @@ class DistanceSensor(Sensor):
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
     def detect(self, visible_objects):
-        '''
-        ray = Ray(self.abs_pos, angle=self.abs_angle)
-        candidates = []
-        for obj in visible_objects:
-            candidates.extend(obj.get_intersections(ray))
-        print(len(candidates))
-        if len(candidates) > 0:
-            point = choose_nearest_point(candidates, ray.source)
-            self.intersection_pos = [float(point.x), float(point.y)]
-            diff_vector = self.abs_pos - self.intersection_pos
-            self.distance = np.sqrt(np.dot(diff_vector, diff_vector))
-        else:
-            self.intersection_pos = self.abs_pos
-            self.distance = self.max_distance
-        '''
         self.intersection_pos = [0, 0]
+        raise NotImplementedError()
 
 class Robot(GeomContainer):
     def __init__(self, **kwargs):
         geom = rendering.make_circle(30)
         collider_func = None
-#        collider_func = lambda pos, angle: Circle(Point(*pos), 30)
         GeomContainer.__init__(self, geom, collider_func=collider_func)
         #
         self.set_color(0, 0, 1)
@@ -147,6 +155,10 @@ def rotate(pos_array, angle, deg=False):
     rotation_matrix = np.array([[c, -s], [s, c]])
     return np.dot(rotation_matrix, pos_array.T).T
 
+def polyline_to_segmentlist(polyline):
+    return [Segment(polyline[i], polyline[i + 1]) for i in range(-1, len(polyline))]
+        
+
 class ObstacleEnv(Env):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
@@ -160,7 +172,7 @@ class ObstacleEnv(Env):
         self.robot = Robot()
         self.obstacles = []
         for i in range(3):
-            obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: Polygon(*rotate(UNIT_SQUARE * 50 + pos, angle)))
+            obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: polyline_to_segmentlist(rotate(UNIT_SQUARE, angle) * 50 + pos))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
         #
