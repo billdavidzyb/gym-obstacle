@@ -60,11 +60,9 @@ class GeomContainer(rendering.Geom):
     def get_geom_list(self):
         return [self]
 
-def choose_nearest_point(points, reference_point):
-    if len(points) == 0:
-        raise RuntimeError()
-    points = sorted(points, key=lambda point: point.distance(reference_point))
-    return points[0]
+def get_nearest_point(pos_list, ref_pos):
+    sorted_pos_list = sorted(pos_list, key=lambda pos: np.sum((pos - ref_pos) ** 2))
+    return sorted_pos_list[0]
 
 class Segment():
     def __init__(self, start, end):
@@ -74,7 +72,7 @@ class Segment():
         return self.end[0] - self.start[0]
     def diff_y(self):
         return self.end[1] - self.start[1]
-    def get_intersecion(self, segment):
+    def get_intersection(self, segment):
         def check_intersection_ls(line, segment):
             l = line.end - line.start
             p1 = segment.start - line.start
@@ -92,7 +90,7 @@ class Segment():
 class Sensor(GeomContainer):
     def __init__(self, geom, **kwargs):
         GeomContainer.__init__(self, geom, **kwargs)
-    def detect(self, objects):
+    def detect(self, obstacles):
         raise NotImplementedError()
 
 class DistanceSensor(Sensor):
@@ -107,13 +105,19 @@ class DistanceSensor(Sensor):
         Sensor.render(self)
 #        print(self.abs_pos)
         self.ray_geom.start = self.abs_pos
-        self.ray_geom.end = self.abs_pos + rotate([100, 0], self.abs_angle)
+        self.ray_geom.end = self.intersection_pos
         self.ray_geom.render()
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
-    def detect(self, visible_objects):
-        self.intersection_pos = [0, 0]
-        raise NotImplementedError()
+    def detect(self, obstacles):
+        seg = Segment(self.abs_pos, self.abs_pos + rotate([100, 0], self.abs_angle))
+        intersections = []
+        for obs in obstacles:
+            intersections += obs.get_intersections([seg])
+        if len(intersections) > 0:
+            self.intersection_pos = get_nearest_point(intersections, self.abs_pos)
+        else:
+            self.intersection_pos = self.abs_pos
 
 class Robot(GeomContainer):
     def __init__(self, **kwargs):
@@ -156,7 +160,7 @@ def rotate(pos_array, angle, deg=False):
     return np.dot(rotation_matrix, pos_array.T).T
 
 def polyline_to_segmentlist(polyline):
-    return [Segment(polyline[i], polyline[i + 1]) for i in range(-1, len(polyline))]
+    return [Segment(polyline[i - 1], polyline[i]) for i in range(len(polyline))]
         
 
 class ObstacleEnv(Env):
