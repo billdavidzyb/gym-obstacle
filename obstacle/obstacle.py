@@ -77,13 +77,13 @@ class Segment():
             l = line.end - line.start
             p1 = segment.start - line.start
             p2 = segment.end - line.start
-            return np.sign(np.cross(l, p1)) == np.sign(np.cross(l, p2)) # TODO: sign==0
+            return np.sign(np.cross(l, p1)) != np.sign(np.cross(l, p2)) # TODO: sign==0
         def check_intersection_ss(seg1, seg2):
             return check_intersection_ls(line=seg1, segment=seg2) and check_intersection_ls(line=seg2, segment=seg1)
         s1, s2 = self, segment
         if check_intersection_ss(s1, s2):
-            r = (s2.diff_y() * (s2.start[0] - s1.start[0])) / (s2.diff_x() * (s2.start[1] - s1.start[1])) / (s1.diff_x() * s2.diff_y() - s1.diff_y() * s2.diff_x())
-            return r * s1.start + (1 - r) * s1.end
+            r = (s2.diff_y() * (s2.start[0] - s1.start[0]) - s2.diff_x() * (s2.start[1] - s1.start[1])) / (s1.diff_x() * s2.diff_y() - s1.diff_y() * s2.diff_x())
+            return (1 -r) * s1.start + r * s1.end
         else:
             return None
 
@@ -110,7 +110,7 @@ class DistanceSensor(Sensor):
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
     def detect(self, obstacles):
-        seg = Segment(self.abs_pos, self.abs_pos + rotate([100, 0], self.abs_angle))
+        seg = Segment(self.abs_pos, self.abs_pos + rotate([self.max_distance, 0], self.abs_angle))
         intersections = []
         for obs in obstacles:
             intersections += obs.get_intersections([seg])
