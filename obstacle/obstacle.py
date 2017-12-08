@@ -87,6 +87,19 @@ class Segment():
         else:
             return None
 
+class Wall(GeomContainer):
+    def __init__(self, start, end, color, **kwargs):
+        GeomContainer.__init__(self, rendering.Line(start, end), collider_func=self.collider_func, **kwargs)
+        self.set_color(*color)
+        self.wall_segment = Segment(start, end)
+    def set_pos(self, pos_x, pos_y):
+        pass
+    def set_angle(self, angle, deg=False):
+        pass
+    def collider_func(self, *args):
+        return [self.wall_segment]
+    
+
 class Sensor(GeomContainer):
     def __init__(self, geom, **kwargs):
         GeomContainer.__init__(self, geom, **kwargs)
@@ -183,7 +196,10 @@ class ObstacleEnv(Env):
             obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: polyline_to_segmentlist(rotate(UNIT_SQUARE, angle) * 50 + pos))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
-        
+        self.obstacles.append(Wall([0, 0], [self.screen_width, 0], (0, 1, 0)))
+        self.obstacles.append(Wall([self.screen_width, 0], [self.screen_width, self.screen_height], (0, 1, 0)))
+        self.obstacles.append(Wall([self.screen_width, self.screen_height], [0, self.screen_height], (0, 1, 0)))
+        self.obstacles.append(Wall([0, self.screen_height], [0, 0], (0, 1, 0)))
         #
         self.visible_object = []
         self.register_visible_object(self.robot)
