@@ -98,15 +98,19 @@ class DistanceSensor(Sensor):
         Sensor.__init__(self, geom, **kwargs)
         self.ray_geom = rendering.Line()
         self.ray_geom.set_color(1, 0.5, 0.5)
+        self.effect_geom = GeomContainer(rendering.make_circle(radius=5, filled=False))
+        self.effect_geom.set_color(1, 0.5, 0.5)
         self.intersection_pos = [0, 0]
         self.distance = 0
-        self.max_distance = 1000
+        self.max_distance = 200
     def render(self):
         Sensor.render(self)
 #        print(self.abs_pos)
         self.ray_geom.start = self.abs_pos
         self.ray_geom.end = self.intersection_pos
         self.ray_geom.render()
+        self.effect_geom.set_pos(*self.intersection_pos)
+        self.effect_geom.render()
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
     def detect(self, obstacles):
@@ -117,7 +121,7 @@ class DistanceSensor(Sensor):
         if len(intersections) > 0:
             self.intersection_pos = get_nearest_point(intersections, self.abs_pos)
         else:
-            self.intersection_pos = self.abs_pos
+            self.intersection_pos = seg.end
 
 class Robot(GeomContainer):
     def __init__(self, **kwargs):
@@ -179,6 +183,7 @@ class ObstacleEnv(Env):
             obs = GeomContainer(rendering.make_polygon(UNIT_SQUARE * 50), lambda pos, angle: polyline_to_segmentlist(rotate(UNIT_SQUARE, angle) * 50 + pos))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
+        
         #
         self.visible_object = []
         self.register_visible_object(self.robot)
