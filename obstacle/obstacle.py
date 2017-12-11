@@ -61,7 +61,7 @@ class GeomContainer(rendering.Geom):
         return [self]
 
 def get_nearest_point(pos_list, ref_pos):
-    sorted_pos_list = sorted(pos_list, key=lambda pos: np.sum((pos - ref_pos) ** 2))
+    sorted_pos_list = sorted(pos_list, key=lambda pos: np.linalg.norm(pos - ref_pos, ord=2))
     return sorted_pos_list[0]
 
 class Segment():
@@ -133,8 +133,10 @@ class DistanceSensor(Sensor):
             intersections += obs.get_intersections([seg])
         if len(intersections) > 0:
             self.intersection_pos = get_nearest_point(intersections, self.abs_pos)
+            self.distance = np.linalg.norm(self.intersection_pos - self.abs_pos, ord=2)
         else:
             self.intersection_pos = seg.end
+            self.distance = self.max_distance
 
 class Robot(GeomContainer):
     def __init__(self, **kwargs):
