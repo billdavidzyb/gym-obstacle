@@ -14,6 +14,7 @@ class GeomContainer(rendering.Geom):
         self.abs_pos = np.copy(self.pos)
         self.abs_angle = self.angle
         self.trans = rendering.Transform()
+        self.segments_cache = None
         #
         self.add_attr(self.trans)
     def render(self):
@@ -47,11 +48,16 @@ class GeomContainer(rendering.Geom):
                 self.abs_pos += rotate(attr.translation, prev_angle)
                 self.abs_angle += attr.rotation
                 prev_angle = attr.rotation
+        self.segments_cache = None
+    def get_segments(self):
+        if self.segments_cache is None:
+            self.segments_cache = self.collider_func(self.abs_pos, self.abs_angle)
+        return self.segments_cache
     def get_intersections(self, segment_list):
         if self.collider_func is None:
             return []
         intersections = []
-        for collider_segment in self.collider_func(self.abs_pos, self.abs_angle):
+        for collider_segment in self.get_segments():
             for segment in segment_list:
                 intersection = collider_segment.get_intersection(segment)
                 if intersection is not None:
@@ -98,7 +104,6 @@ class Wall(GeomContainer):
         pass
     def collider_func(self, *args):
         return [self.wall_segment]
-    
 
 class Sensor(GeomContainer):
     def __init__(self, geom, **kwargs):
@@ -147,11 +152,11 @@ class Robot(GeomContainer):
         self.set_color(0, 0, 1)
         #
         self.sensors = []
-        for i in range(3):
+        for i in range(20):
             dist_sensor = DistanceSensor(rendering.make_circle(5))
             dist_sensor.set_color(1, 0, 0)
-            dist_sensor.set_pos(*(rotate([30, 0], 120 * i, deg=True)))
-            dist_sensor.set_angle(120 * i, True)
+            dist_sensor.set_pos(*(rotate([30, 0], 360 / 20 * i, deg=True)))
+            dist_sensor.set_angle(360 / 20 * i, True)
             dist_sensor.add_attr(self.trans)
             self.sensors.append(dist_sensor)
     def render(self):
