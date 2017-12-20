@@ -71,13 +71,16 @@ def get_nearest_point(pos_list, ref_pos):
     return sorted_pos_list[0]
 
 class Segment():
-    def __init__(self, start, end):
+    def __init__(self, start=(0, 0), end=(0, 0)):
         self.start = np.asarray(start, dtype=np.float32)
         self.end = np.asarray(end, dtype=np.float32)
     def diff_x(self):
         return self.end[0] - self.start[0]
     def diff_y(self):
         return self.end[1] - self.start[1]
+    def update_start_end(self, start, end):
+        self.start[:] = start
+        self.end[:] = end
     def get_intersection(self, segment):
         def check_intersection_ls(line, segment):
             l = line.end - line.start
@@ -121,6 +124,8 @@ class DistanceSensor(Sensor):
         self.intersection_pos = [0, 0]
         self.distance = 0
         self.max_distance = 200
+        self._ray_segment = Segment()
+        self._update_ray_segment()
     def render(self):
         Sensor.render(self)
 #        print(self.abs_pos)
@@ -131,16 +136,18 @@ class DistanceSensor(Sensor):
         self.effect_geom.render()
     def get_geom_list(self):
         return Sensor.get_geom_list(self) + [self.ray_geom]
+    def _update_ray_segment(self):
+        self._ray_segment.update_start_end(self.abs_pos, self.abs_pos + rotate([self.max_distance, 0], self.abs_angle))
     def detect(self, obstacles):
-        seg = Segment(self.abs_pos, self.abs_pos + rotate([self.max_distance, 0], self.abs_angle))
+        self._update_ray_segment()
         intersections = []
         for obs in obstacles:
-            intersections += obs.get_intersections([seg])
+            intersections += obs.get_intersections([self._ray_segment])
         if len(intersections) > 0:
             self.intersection_pos = get_nearest_point(intersections, self.abs_pos)
             self.distance = np.linalg.norm(self.intersection_pos - self.abs_pos, ord=2)
         else:
-            self.intersection_pos = seg.end
+            self.intersection_pos = self._ray_segment.end
             self.distance = self.max_distance
 
 class Robot(GeomContainer):
@@ -173,14 +180,14 @@ class Robot(GeomContainer):
         for sensor in self.sensors:
             sensor.detect(visible_objects)
 
-UNIT_SQUARE = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
+UNIT_SQUARE = np.asarray([[-1, -1], [-1, 1], [1, 1], [1, -1]]) / 2
 
 def rotate(pos_array, angle, deg=False):
-    pos_array = np.array(pos_array)
+    pos_array = np.asarray(pos_array)
     if deg:
         angle = np.deg2rad(angle)
     c, s = np.cos(angle), np.sin(angle)
-    rotation_matrix = np.array([[c, -s], [s, c]])
+    rotation_matrix = np.asarray([[c, -s], [s, c]])
     return np.dot(rotation_matrix, pos_array.T).T
 
 def polyline_to_segmentlist(polyline):
