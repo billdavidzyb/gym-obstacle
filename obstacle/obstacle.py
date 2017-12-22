@@ -86,7 +86,7 @@ class Segment():
             l = line.end - line.start
             p1 = segment.start - line.start
             p2 = segment.end - line.start
-            return np.sign(np.cross(l, p1)) != np.sign(np.cross(l, p2)) # TODO: sign==0
+            return (p1[0]*l[1] - p1[1]*l[0] > 0) ^ (p2[0]*l[1] - p2[1]*l[0] > 0) # TODO: sign==0
         def check_intersection_ss(seg1, seg2):
             return check_intersection_ls(line=seg1, segment=seg2) and check_intersection_ls(line=seg2, segment=seg1)
         s1, s2 = self, segment
